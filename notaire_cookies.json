@@ -1,0 +1,22 @@
+[
+  {
+    "name": "OClmoOot",
+    "value": "Ayfn6SGfAQAA79KJsXqvcN5OhjseinOPf9hnyw-X2aK7X1AeUWB6tA1aWxDdAbCQoH2ucrN5wH8AAEB3AAAAAA|1|0|3c94a9862ff51d7982ca48b525cb88c1cbf76404",
+    "domain": "statuts.notaire.be",
+    "path": "/",
+    "expires": 1817540406.747632,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "TS01dc4fc6",
+    "value": "01b8f84c9483e7fb17e5b18195eb2e438d09d3a39ba9535862add050b0412f6868cc3d395bfa1b270707b85d177907d31bfb90436a",
+    "domain": "statuts.notaire.be",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Strict"
+  }
+]
