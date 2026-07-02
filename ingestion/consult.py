@@ -176,17 +176,17 @@ def get_all_kpis(enterprise_number: str) -> list[dict]:
 
         # ---------------- PDF ----------------   --> déjà fait
 
-        # try:
-        #     download_pdf_to_hdfs(session, deposit)
+        try:
+            download_pdf_to_hdfs(session, deposit)
 
-        # except HTTPError:
-        #     # on laisse la boucle principale gérer le 400/429
-        #     raise
+        except HTTPError:
+            # on laisse la boucle principale gérer le 400/429
+            raise
 
-        # except Exception as e:
-        #     print(f"    ✗ PDF failed for {year}: {e}")
+        except Exception as e:
+            print(f"    ✗ PDF failed for {year}: {e}")
 
-        # time.sleep(0.3)
+        time.sleep(0.3)
 
         # ---------------- CSV ----------------
 
