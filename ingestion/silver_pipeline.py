@@ -92,11 +92,7 @@ for ent in source.find({}, {"_id": 0}):
 
     if len(batch) == BATCH_SIZE:
         silver.insert_many(batch)
-        print(f"{len(batch)} documents insérés")
         batch.clear()
 
 if batch:
     silver.insert_many(batch)
-    print(f"{len(batch)} documents insérés")
-
-print("Transformation Bronze -> Silver terminée.")

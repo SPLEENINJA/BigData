@@ -10,25 +10,9 @@ log = logging.getLogger(__name__)
 
 BASE        = "https://statuts.notaire.be/stapor_v1"
 COOKIE_FILE = Path("notaire_cookies.json")
-HDFS_DEST   = f"/strator/"
+TMP_PDFS    = Path("tmp/notaire")
+TMP_PDFS.mkdir(parents=True, exist_ok=True)
 PAGE_SIZE   = 20
-
-import itertools
-
-PROXIES = [
-    "socks5h://127.0.0.1:9050",
-    "socks5h://127.0.0.1:9052",
-    "socks5h://127.0.0.1:9054",
-]
-
-proxy_cycle = itertools.cycle(PROXIES)
-
-from hdfs import InsecureClient
-
-client = InsecureClient(
-    "http://localhost:9870",
-    user="root"
-)
 
 HEADERS_API = {
     "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
@@ -172,7 +156,7 @@ def download_statute_pdf(
     session: requests.Session,
     enterprise_number: str,
     statute: dict,
-    dest_dir: Path = HDFS_DEST,
+    dest_dir: Path = TMP_PDFS,
 ) -> Path | None:
     doc_id    = statute["documentId"]
     deed_date = statute.get("deedDate", "unknown").replace("-", "")
@@ -186,25 +170,21 @@ def download_statute_pdf(
         f"{BASE}/api/enterprises/{enterprise_number}/statutes/non-certified/{doc_id}",
         timeout=30,
     )
-
     if r.status_code == 404:
         return None
     r.raise_for_status()
     if "pdf" not in r.headers.get("content-type", "") and len(r.content) < 1000:
         return None
 
-    with client.write(dest_dir, overwrite=True) as writer:
-        for chunk in r.iter_content(chunk_size=1024 * 1024):
-            if chunk:
-                writer.write(chunk)
+    dest.write_bytes(r.content)
+    log.info(f"    Sauvegardé : {dest.name} ({len(r.content) // 1024} KB)")
+    return dest
 
-    log.info(f"    PDF téléchargé : {dest.name}")
-    return dest_dir
 
 def get_all_statutes(
     enterprise_number: str,
     session: requests.Session | None = None,
-    dest_dir: Path = HDFS_DEST,
+    dest_dir: Path = TMP_PDFS,
 ) -> list[dict]:
     if session is None:
         session = get_session()
@@ -221,139 +201,28 @@ def needs_notaire_check(forme_juridique: str, status: str = "Active") -> bool:
     return status == "Active" and forme_juridique not in NO_NOTAIRE_FORMS
 
 
-from pymongo import MongoClient,ReturnDocument
-
-client_mongo = MongoClient("mongodb://admin:admin123@127.0.0.1:27018/?authSource=admin")
-
-db = client_mongo["strator"]
-state_db = db["state_db"]
-
-
-# if __name__ == "__main__":
-    # logging.basicConfig(
-    #     level=logging.INFO,
-    #     format="%(asctime)s  %(levelname)-8s %(message)s",
-    #     datefmt="%H:%M:%S",
-    # )
-
-    # ENTREPRISES = {
-    #     "Apple Retail Belgium": "0836157420",
-    #     "Google Belgium":       "0878065378",
-    #     "SNCB":                 "0203430576",
-    # }
-
-    # session = get_session()  # Playwright seulement si cookies expirés
-
-    # for nom, bce in ENTREPRISES.items():
-    #     log.info(f"\n{'='*50}\n{nom} ({bce})")
-    #     statutes = get_all_statutes(bce, session=session)
-
-    #     if not statutes:
-    #         log.info("  Aucun statut disponible.")
-    #         continue
-
-    #     for s in statutes:
-    #         log.info(f"  {'✓' if s['local_pdf'] else '✗'} {s.get('deedDate')}  {s.get('documentTitle')}")
-
-
-# def worker(worker_id: int):
-    
-logging.basicConfig(level=logging.INFO,
-format="%(asctime)s  %(levelname)-8s %(message)s",
-datefmt="%H:%M:%S",
-)
-
-while True:
-
-    doc = state_db.find_one_and_update(
-        {"Status": "pending"},
-        {"$set": {"Status": "running"}},
-        return_document=ReturnDocument.AFTER
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s  %(levelname)-8s %(message)s",
+        datefmt="%H:%M:%S",
     )
 
-    if doc is None:
-        print("Plus aucune entreprise à traiter.")
-        break
+    ENTREPRISES = {
+        "Apple Retail Belgium": "0836157420",
+        "Google Belgium":       "0878065378",
+        "SNCB":                 "0203430576",
+    }
 
-    enterprise_number = doc["EnterpriseNumber"]
+    session = get_session()  # Playwright seulement si cookies expirés
 
-    print(f"Processing {enterprise_number}")
+    for nom, bce in ENTREPRISES.items():
+        log.info(f"\n{'='*50}\n{nom} ({bce})")
+        statutes = get_all_statutes(bce, session=session)
 
-    try:
-
-        kpis = get_all_statutes(enterprise_number = enterprise_number.replace(".", ""))
-
-        if kpis:
-
-            state_db.update_one(
-                {"EnterpriseNumber": enterprise_number},
-                {"$set": {"Status": "done"}}
-            )
-
-        else:
-
-            print(f"{enterprise_number} -> Aucun fichier trouvé.")
-
-            state_db.update_one(
-                {"EnterpriseNumber": enterprise_number},
-                {"$set": {"Status": "no_data"}}
-            )
-
-    except requests.HTTPError as e:
-
-        status = e.response.status_code
-
-        if status == 400:
-            print(f"{enterprise_number} -> Erreur 400 (entreprise sans dépôt ou requête invalide)")
-
-            state_db.update_one(
-                {"EnterpriseNumber": enterprise_number},
-                {"$set": {"Status": "no_data"}}
-            )
-
-        elif status == 429:
-            print("429 -> changement de proxy Tor")
-
-            state_db.update_one(
-                {"EnterpriseNumber": enterprise_number},
-                {"$set": {"Status": "pending"}}
-            )
-
-            time.sleep(3)
+        if not statutes:
+            log.info("  Aucun statut disponible.")
             continue
 
-        else:
-            print(f"{enterprise_number} -> HTTP {status}")
-
-            state_db.update_one(
-                {"EnterpriseNumber": enterprise_number},
-                {
-                    "$set": {
-                        "Status": "error",
-                        "Error": str(e)
-                    }
-                }
-            )
-
-    except Exception as e:
-
-        print(f"{enterprise_number} -> {e}")
-
-        state_db.update_one(
-            {"EnterpriseNumber": enterprise_number},
-            {
-                "$set": {
-                    "Status": "error",
-                    "Error": str(e)
-                }
-            }
-        )
-
-
-# from concurrent.futures import ThreadPoolExecutor
-
-# NB_WORKERS = 1
-
-# with ThreadPoolExecutor(max_workers=NB_WORKERS) as executor:
-#     for i in range(NB_WORKERS):
-#         executor.submit(worker, i)
+        for s in statutes:
+            log.info(f"  {'✓' if s['local_pdf'] else '✗'} {s.get('deedDate')}  {s.get('documentTitle')}")

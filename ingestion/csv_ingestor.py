@@ -6,7 +6,6 @@ import csv
 
 DATA_DIR = Path(r"C:\Users\capel\Desktop\IPSSI\Semaine22 - Big Data\notebook solo\KboOpenData_0404_2026_06_28_Full")
 
-
 client = MongoClient("mongodb://admin:admin123@127.0.0.1:27018/?authSource=admin")
 db = client["kbo"]
 

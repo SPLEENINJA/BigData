@@ -1,0 +1,79 @@
+body{
+    margin:0;
+    background:#f4f6fb;
+    font-family:Arial;
+}
+
+.container{
+    width:1200px;
+    margin:auto;
+    padding:40px;
+}
+
+.card{
+
+    background:white;
+
+    border-radius:12px;
+
+    padding:25px;
+
+    margin-top:25px;
+
+    box-shadow:0 2px 10px rgba(0,0,0,.08);
+
+}
+
+table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+th{
+
+    background:#1e293b;
+
+    color:white;
+
+    padding:10px;
+
+}
+
+td{
+
+    padding:10px;
+
+    border-bottom:1px solid #ddd;
+
+}
+
+tr:hover{
+
+    background:#f5f5f5;
+
+}
+
+
+.search{
+    display:flex;
+    gap:15px;
+}
+
+.search input{
+    flex:1;
+    padding:14px;
+    border-radius:8px;
+    border:1px solid #ddd;
+}
+
+.search button{
+    width:180px;
+    background:#2563eb;
+    color:white;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+}

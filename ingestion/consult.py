@@ -5,6 +5,8 @@ from io import StringIO
 from pathlib import Path
 from requests.exceptions import HTTPError
 
+from ingestion import state_db
+
 from hdfs import InsecureClient
 
 client = InsecureClient(
@@ -12,6 +14,19 @@ client = InsecureClient(
     user="root"
 )
 
+class LocalClient:
+    def __init__(self, root):
+        self.root = Path(root)
+
+    def makedirs(self, path):
+        (self.root / path.lstrip("/")).mkdir(parents=True, exist_ok=True)
+
+    def write(self, path, overwrite=True, encoding="utf-8"):
+        file = self.root / path.lstrip("/")
+        file.parent.mkdir(parents=True, exist_ok=True)
+        return open(file, "w", encoding=encoding)
+    
+client = LocalClient(r"C:\Users\capel\Desktop\IPSSI\Semaine22 - Big Data")
 import itertools
 
 PROXIES = [
@@ -174,19 +189,19 @@ def get_all_kpis(enterprise_number: str) -> list[dict]:
     
         print(f"  Processing {year} (id={deposit_id})...")
 
-        # ---------------- PDF ----------------   --> déjà fait
+        # ---------------- PDF ----------------   
 
-        # try:
-        #     download_pdf_to_hdfs(session, deposit)
+        try:
+            download_pdf_to_hdfs(session, deposit)
 
-        # except HTTPError:
-        #     # on laisse la boucle principale gérer le 400/429
-        #     raise
+        except HTTPError:
+            # on laisse la boucle principale gérer le 400/429
+            raise
 
-        # except Exception as e:
-        #     print(f"    ✗ PDF failed for {year}: {e}")
+        except Exception as e:
+            print(f"    ✗ PDF failed for {year}: {e}")
 
-        # time.sleep(0.3)
+        time.sleep(0.3)
 
         # ---------------- CSV ----------------
 
@@ -215,31 +230,11 @@ def get_all_kpis(enterprise_number: str) -> list[dict]:
 
     return results
 
-
-from pymongo import MongoClient,ReturnDocument
-
-client_mongo = MongoClient("mongodb://admin:admin123@127.0.0.1:27018/?authSource=admin")
-
-db = client_mongo["kbo"]
-state_db = db["state_db"]
-
-
 def worker(worker_id: int):
     while True:
 
-        doc = state_db.find_one_and_update(
-            {"Status": "pending"},
-            {"$set": {"Status": "running"}},
-            return_document=ReturnDocument.AFTER
-        )
+        enterprise_number = "0400039084"
 
-        if doc is None:
-            print("Plus aucune entreprise à traiter.")
-            break
-
-        enterprise_number = doc["EnterpriseNumber"]
-
-        print(f"[Worker {worker_id}] Processing {enterprise_number}")
 
         try:
 
@@ -247,21 +242,21 @@ def worker(worker_id: int):
 
             if kpis:
 
-                # df = (
-                #     pd.DataFrame(kpis)
-                #     .set_index("year")
-                #     .sort_index(ascending=False)
-                # )
+                df = (
+                    pd.DataFrame(kpis)
+                    .set_index("year")
+                    .sort_index(ascending=False)
+                )
 
-                # print(df[[
-                #     "entity",
-                #     "period_end",
-                #     "chiffre_affaires",
-                #     "ebitda",
-                #     "resultat_net",
-                #     "marge_nette",
-                #     "autonomie_fin"
-                # ]])
+                print(df[[
+                    "entity",
+                    "period_end",
+                    "chiffre_affaires",
+                    "ebitda",
+                    "resultat_net",
+                    "marge_nette",
+                    "autonomie_fin"
+                ]])
 
                 state_db.update_one(
                     {"EnterpriseNumber": enterprise_number},
@@ -303,29 +298,13 @@ def worker(worker_id: int):
             else:
                 print(f"{enterprise_number} -> HTTP {status}")
 
-                state_db.update_one(
-                    {"EnterpriseNumber": enterprise_number},
-                    {
-                        "$set": {
-                            "Status": "error",
-                            "Error": str(e)
-                        }
-                    }
-                )
+
 
         except Exception as e:
 
             print(f"{enterprise_number} -> {e}")
 
-            state_db.update_one(
-                {"EnterpriseNumber": enterprise_number},
-                {
-                    "$set": {
-                        "Status": "error",
-                        "Error": str(e)
-                    }
-                }
-            )
+
 
 
 from concurrent.futures import ThreadPoolExecutor
@@ -337,11 +316,3 @@ with ThreadPoolExecutor(max_workers=NB_WORKERS) as executor:
         executor.submit(worker, i)
 
 
-
-        
-    # df = pd.DataFrame(kpis).set_index("year").sort_index(ascending=False)
-    # pd.set_option("display.float_format", "{:,.2f}".format)
-    # pd.set_option("display.max_columns", None)
-    # pd.set_option("display.width", 200)
-    # print("\n=== KPI Summary ===")
-    # print(df[["entity", "period_end", "chiffre_affaires", "ebitda", "resultat_net", "marge_nette", "autonomie_fin"]])
